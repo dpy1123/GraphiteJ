@@ -12,10 +12,10 @@ final class NonBlockingTcpSender {
     private final String hostname;
     private final int port;
     private final Charset encoding;
-    private SocketChannel clientSocket;
+    private volatile SocketChannel clientSocket;
     private final ExecutorService executor;
     private final ScheduledThreadPoolExecutor timer;
-    private GraphiteJErrorHandler handler;
+    private final GraphiteJErrorHandler handler;
 
     NonBlockingTcpSender(String hostname, int port, Charset encoding, GraphiteJErrorHandler handler) throws IOException {
         this.hostname = hostname;
@@ -27,17 +27,18 @@ final class NonBlockingTcpSender {
         clientSocket = SocketChannel.open();
         clientSocket.connect(new InetSocketAddress(hostname, port));
 
-        executor = Executors.newSingleThreadExecutor(new ThreadFactory() {
-            final ThreadFactory delegate = Executors.defaultThreadFactory();
-            @Override public Thread newThread(Runnable r) {
-                Thread result = delegate.newThread(r);
-                result.setName("GraphiteJ-" + result.getName());
-                result.setDaemon(true);
-                return result;
-            }
+        executor = Executors.newSingleThreadExecutor(r -> {
+            Thread result = Executors.defaultThreadFactory().newThread(r);
+            result.setName("GraphiteJ-sender-" + result.getName());
+            result.setDaemon(true);
+            return result;
         });
 
-        timer = new ScheduledThreadPoolExecutor(1);
+        timer = new ScheduledThreadPoolExecutor(1, r -> {
+            Thread result = Executors.defaultThreadFactory().newThread(r);
+            result.setName("GraphiteJ-reconnect-"+ result.getName());
+            return result;
+        });
     }
 
     void stop() {
