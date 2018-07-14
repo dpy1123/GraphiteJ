@@ -1,6 +1,9 @@
 # GraphiteJ
 
-yet another graphite java client 
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/top.devgo/graphitej/badge.svg)](https://search.maven.org/#search%7Cga%7C1%7Ctop.devgo.graphitej)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
+
+yet another graphite java client
 
 
 ## usage
@@ -11,7 +14,7 @@ yet another graphite java client
 <dependency>
     <groupId>top.devgo</groupId>
     <artifactId>graphitej</artifactId>
-    <version>1.0</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
