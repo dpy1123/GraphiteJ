@@ -21,8 +21,8 @@
     </licenses>
 
     <scm>
-        <url>https://github.com/dpy1123/GraphiteJ.git</url>
-        <connection>https://github.com/dpy1123/GraphiteJ</connection>
+        <url>https://github.com/dpy1123/GraphiteJ</url>
+        <connection>https://github.com/dpy1123/GraphiteJ.git</connection>
         <developerConnection>https://github.com/dpy1123</developerConnection>
     </scm>
 
