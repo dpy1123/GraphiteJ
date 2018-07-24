@@ -9,17 +9,15 @@ import java.util.concurrent.*;
 
 
 final class NonBlockingTcpSender {
-    private final String hostname;
-    private final int port;
     private final Charset encoding;
     private volatile SocketChannel clientSocket;
     private final ExecutorService executor;
-    private final ScheduledThreadPoolExecutor timer;
+    private final ScheduledExecutorService connectionChecker;
     private final GraphiteJErrorHandler handler;
+    private static final int MAX_CAPACITY = 4096;
+    private final LinkedBlockingQueue<String> pendingList = new LinkedBlockingQueue<>(MAX_CAPACITY);
 
     NonBlockingTcpSender(String hostname, int port, Charset encoding, GraphiteJErrorHandler handler) throws IOException {
-        this.hostname = hostname;
-        this.port = port;
         this.encoding = encoding;
         this.handler = handler;
 
@@ -34,16 +32,34 @@ final class NonBlockingTcpSender {
             return result;
         });
 
-        timer = new ScheduledThreadPoolExecutor(1, r -> {
+        connectionChecker = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread result = Executors.defaultThreadFactory().newThread(r);
-            result.setName("GraphiteJ-reconnect-"+ result.getName());
+            result.setName("GraphiteJ-connectionChecker-"+ result.getName());
             return result;
         });
+
+        connectionChecker.scheduleAtFixedRate(() -> {
+            try {
+                clientSocket.socket().sendUrgentData(0xFF);
+            } catch (IOException e) {
+                try {
+                    clientSocket.close();
+                    clientSocket = SocketChannel.open();
+                    clientSocket.connect(new InetSocketAddress(hostname, port));
+                } catch (IOException e1) {
+                    //NO-OP
+                }
+                while (!pendingList.isEmpty()) {
+                    send(pendingList.poll());
+                }
+            }
+        }, 5, 5, TimeUnit.SECONDS);
     }
 
     void stop() {
         try {
             executor.shutdown();
+            connectionChecker.shutdown();
             executor.awaitTermination(30, TimeUnit.SECONDS);
         }
         catch (Exception e) {
@@ -62,42 +78,19 @@ final class NonBlockingTcpSender {
     }
 
     void send(final String message) {
-        try {
+        if (clientSocket.isConnected()) {
             executor.execute(() -> blockingSend(message));
+        } else {
+            while (pendingList.size() >= MAX_CAPACITY)
+                pendingList.poll();
+            pendingList.add(message);
         }
-        catch (Exception e) {
-            handler.handle(e);
-        }
-    }
-
-    private volatile boolean reconnecting = false;
-    private void reconnect() {
-        if (!reconnecting){
-            reconnecting = true;
-            doReconnect();
-        }
-    }
-    private void doReconnect() {
-        timer.schedule(() -> {
-            try {
-                clientSocket.close();
-                clientSocket = SocketChannel.open();
-                clientSocket.connect(new InetSocketAddress(hostname, port));
-                reconnecting = false;
-            } catch (IOException e) {
-                doReconnect();
-            }
-        }, 5, TimeUnit.SECONDS);
     }
 
     private void blockingSend(String message) {
         try {
             final byte[] sendData = message.getBytes(encoding);
             clientSocket.write(ByteBuffer.wrap(sendData));
-        } catch (IOException e) {
-            if ("Broken pipe".equals(e.getMessage())){
-                reconnect();
-            }
         } catch (Exception e) {
             handler.handle(e);
         }
