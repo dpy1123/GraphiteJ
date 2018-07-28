@@ -14,7 +14,7 @@ yet another graphite java client
 <dependency>
     <groupId>top.devgo</groupId>
     <artifactId>graphitej</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
 </dependency>
 ```
 
